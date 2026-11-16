@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Habilidades",
+    "description": "Activa, limita al usuario o desactiva cada habilidad reescribiendo el frontmatter de su SKILL.md."
+  }
+}

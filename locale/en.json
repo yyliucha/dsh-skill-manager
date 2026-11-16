@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Skills",
+    "description": "Switch each agent skill on, to user-only, or off by rewriting its SKILL.md frontmatter."
+  }
+}

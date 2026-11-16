@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "技能管理",
+    "description": "在设置里逐个启用、限制或关闭 agent 技能，改动写入对应 SKILL.md 的 frontmatter。"
+  }
+}

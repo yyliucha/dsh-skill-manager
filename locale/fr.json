@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Compétences",
+    "description": "Activez, réservez à l’utilisateur ou désactivez chaque compétence en réécrivant le frontmatter de son SKILL.md."
+  }
+}

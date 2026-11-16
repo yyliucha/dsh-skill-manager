@@ -1,0 +1,44 @@
+{
+  "name": "@local/dsh-skill-manager",
+  "version": "0.6.0",
+  "private": true,
+  "description": "Enable and disable agent skills from the Harness Web UI.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.6-alpha.2"
+  },
+  "scripts": {
+    "test": "node --test test/skills.test.mjs test/rows.test.mjs test/scan.test.mjs test/drafts.test.mjs test/fileops.test.mjs test/usage.test.mjs"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}
+
+
+
+
+
+
+
+
+

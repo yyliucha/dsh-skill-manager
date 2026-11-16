@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "スキル管理",
+    "description": "各エージェントスキルを有効・ユーザーのみ・無効に切り替え、SKILL.md の frontmatter を書き換えます。"
+  }
+}
