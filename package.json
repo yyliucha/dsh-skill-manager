@@ -1,9 +1,25 @@
 {
-  "name": "@local/dsh-skill-manager",
+  "name": "@yyliucha/dsh-skill-manager",
   "version": "0.6.0",
-  "private": true,
   "description": "Enable and disable agent skills from the Harness Web UI.",
   "type": "module",
+  "license": "MIT",
+  "author": "yyliucha",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yyliucha/dsh-skill-manager.git"
+  },
+  "homepage": "https://github.com/yyliucha/dsh-skill-manager#readme",
+  "bugs": {
+    "url": "https://github.com/yyliucha/dsh-skill-manager/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "skills",
+    "skill-manager"
+  ],
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -17,7 +33,10 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "assets/icon-180.png",
+    "assets/icon-512.png",
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.6-alpha.2"
@@ -33,12 +52,3 @@
     }
   }
 }
-
-
-
-
-
-
-
-
-

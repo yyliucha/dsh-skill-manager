@@ -15,7 +15,7 @@
  * - `lastWrite`  … the receipt of the most recent apply, so the UI can report
  *                  “wrote N files / M failed”.
  *
- * @module @local/dsh-skill-manager
+ * @module @yyliucha/dsh-skill-manager
  */
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
