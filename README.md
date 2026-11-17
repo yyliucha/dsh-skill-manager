@@ -88,6 +88,3 @@ Structure:
 **范围**：只扫描/改写默认技能根（`~/.dsh/skills`、`~/.agents/skills`、所选会话工作区下的 `.dsh/skills` 与 `.agents/skills`，跟随符号链接）；内置技能只读；页面需要至少一个会话；手工写死 `user-invocable: false` 的孤儿技能不会出现在页面，经管理器关掉的会记住并可改回。
 
 **开发**：`npm install`（固定 schemastery 3.18.6-alpha.2，与 DSH 同版本）+ `node --test`（41 个单测，含 fixture 往返）。
-
-[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
-
