@@ -1,6 +1,6 @@
-# dsh-skill-manager
+# dsh-skill-switcher
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that adds a **Skills** management page to the Web UI (Settings → 技能) and a matching `skill_manager` tool: list your agent skills and switch each one between **On / User only / Off**.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) plugin that turns each agent skill's invocation state into a one-click switch — **On / User only / Off** — from the composer tool row and a Settings page, changing only the two invocation fields in the skill's `SKILL.md`.
 
 English | [中文](#中文)
 
@@ -23,11 +23,17 @@ English | [中文](#中文)
 
 ## Install
 
-1. Open **Plugins** in the sidebar → **Install**, and enter the package spec:
-   - local directory: `F:\dsh\.dsh\plugins\skill-manager` (any local checkout path), or
-   - this repository: `https://github.com/yyliucha/dsh-skill-manager`
-2. Enable the bundle (the installer asks on finish).
-3. Refresh the page once, then open **Settings → 技能**.
+```sh
+dsh plugin --profile <profile> add @jacksun1994/dsh-skill-switcher
+```
+
+Or use **Plugins → Install** in the app with one of these specs:
+
+- npm: `@jacksun1994/dsh-skill-switcher`
+- this repository: `https://github.com/yyliucha/dsh-skill-switcher`
+- a local checkout directory
+
+Enable the bundle, refresh the page once, and open **Settings → 技能**. The same bundle also adds the **技能** control to the composer tool row.
 
 Requirements: DeepSeek Harness `0.2.2-alpha.3` or newer. From `0.2.2-rc.3` the Client Remote namespaces are separate child services, so this plugin declares `remote.settings` / `remote.skills` in its `inject` list.
 
@@ -50,7 +56,7 @@ The manager writes only the two invocation fields of the YAML frontmatter; every
 
 ```sh
 npm install          # pulls @deepseek-ai/schemastery 3.18.6-alpha.2 (pinned, same as DSH)
-node --test test/    # 13 unit tests: frontmatter parsing/rewriting, path rules, fixture round-trips
+node --test test/    # 41 unit tests: frontmatter parsing/rewriting, path rules, fixture round-trips
 ```
 
 Structure:
@@ -75,11 +81,11 @@ Structure:
 - **内置编辑器（实验性）**：「编辑」打开 SKILL.md 文本编辑，「新建」打开新建表单。浏览器**从不直接写文件**：它把请求写进插件的 volatile 配置，宿主执行（frontmatter 校验、256 KB 上限、自动 `.bak` 备份、mtime 冲突拒绝）并把结果写回；「归档」是移动到 `<root>/.archive/<名称>-<时间戳>/`，**没有硬删除**。
 - **工具**：直接对话操作——「把 windows-ops 关掉」「列出技能状态」；工具写入时会记录与界面同一条 override，两边状态一致。
 - 状态直接写进每个 `SKILL.md` 的 frontmatter（就是 DSH 技能系统自己认的那两个字段：`disable-model-invocation` / `user-invocable`），不落数据库、随时可逆、其余内容一字不动（保留 LF/CRLF）；插件自己的配置只存派生数据（最近请求的模式、宿主清单、写入回执）。
-**安装**：侧边栏 Plugins → Install，spec 填本地目录 `F:\dsh\.dsh\plugins\skill-manager` 或本仓库地址 `https://github.com/yyliucha/dsh-skill-manager`，启用后刷新页面，打开 Settings → 技能。
+**安装**：侧边栏 Plugins → Install，spec 填本地目录 `a local checkout directory` 或本仓库地址 `https://github.com/yyliucha/dsh-skill-switcher`，启用后刷新页面，打开 Settings → 技能。
 
 **范围**：只扫描/改写默认技能根（`~/.dsh/skills`、`~/.agents/skills`、所选会话工作区下的 `.dsh/skills` 与 `.agents/skills`，跟随符号链接）；内置技能只读；页面需要至少一个会话；手工写死 `user-invocable: false` 的孤儿技能不会出现在页面，经管理器关掉的会记住并可改回。
 
-**开发**：`npm install`（固定 schemastery 3.18.6-alpha.2，与 DSH 同版本）+ `node --test test/`（13 个单测，含 fixture 往返）。
+**开发**：`npm install`（固定 schemastery 3.18.6-alpha.2，与 DSH 同版本）+ `node --test test/`（41 个单测，含 fixture 往返）。
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 

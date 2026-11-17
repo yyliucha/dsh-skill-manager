@@ -1,24 +1,24 @@
 {
-  "name": "@jacksun1994/dsh-skill-manager",
-  "version": "0.6.1",
-  "description": "Enable and disable agent skills from the Harness Web UI.",
+  "name": "@jacksun1994/dsh-skill-switcher",
+  "version": "0.7.0",
+  "description": "Switch each DeepSeek Harness agent skill on, to user-only, or off — from the composer tool row and a Settings page.",
   "type": "module",
   "license": "MIT",
   "author": "yyliucha",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yyliucha/dsh-skill-manager.git"
+    "url": "git+https://github.com/yyliucha/dsh-skill-switcher.git"
   },
-  "homepage": "https://github.com/yyliucha/dsh-skill-manager#readme",
+  "homepage": "https://github.com/yyliucha/dsh-skill-switcher#readme",
   "bugs": {
-    "url": "https://github.com/yyliucha/dsh-skill-manager/issues"
+    "url": "https://github.com/yyliucha/dsh-skill-switcher/issues"
   },
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "skills",
-    "skill-manager"
+    "skill-switcher"
   ],
   "exports": {
     ".": "./index.js",
