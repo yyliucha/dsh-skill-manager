@@ -44,6 +44,9 @@
   "scripts": {
     "test": "node --test test/skills.test.mjs test/rows.test.mjs test/scan.test.mjs test/drafts.test.mjs test/fileops.test.mjs test/usage.test.mjs"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
