@@ -781,101 +781,246 @@ window.__ModuleLoader__.load({
       h('path', { d: 'M9.6 6.6h2.6M9.6 8.4h2.6', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round', opacity: 0.75 }))
     }
 
-    function ModeSwitch(props) {
-      const { mode, disabled, busy, t, onChange, compact, path } = props
-      return h('div', {
-        role: 'group',
-        style: { display: 'inline-flex', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 8, overflow: 'hidden', flexShrink: 0 }
-      }, MODES.map((value, index) => {
-        const active = mode === value
-        return h('button', {
-          key: value,
-          type: 'button',
-          'aria-pressed': active,
-          disabled: disabled || busy,
-          title: t(`hint.${value}`),
-          onClick: (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            if (!active) onChange(value)
-          },
-          style: {
-            appearance: 'none',
-            border: 'none',
-            borderLeft: index === 0 ? 'none' : '1px solid var(--dsw-alias-border-l1)',
-            background: active ? 'var(--dsw-alias-brand-primary)' : 'transparent',
-            color: active ? 'var(--dsw-alias-bg-base)' : 'var(--dsw-alias-label-secondary)',
-            padding: compact ? '2px 7px' : '5px 10px',
-            font: 'inherit',
-            fontSize: compact ? 11 : 12,
-            lineHeight: compact ? '14px' : '16px',
-            cursor: disabled || busy ? 'default' : 'pointer',
-            opacity: disabled ? 0.55 : 1,
-          }
-        }, t(`mode.${value}`))
+    function ChevronIcon(props) {
+      return h('svg', {
+        width: 12, height: 12, viewBox: '0 0 12 12', fill: 'none', 'aria-hidden': true,
+        style: { display: 'block', flexShrink: 0, color: 'inherit' },
+      },
+      h('path', {
+        d: 'M3 4.5L6 7.5L9 4.5', stroke: 'currentColor', strokeWidth: 1.5,
+        strokeLinecap: 'round', strokeLinejoin: 'round',
       }))
     }
 
+    //#region official style tokens
+    // 与 @deepseek-ai/dsh-client-ui-primitives / ui-theme（0.2.2-rc.3）对齐的视觉常量：
+    // 菜单材料（透明 + 背景模糊 + elevation 阴影）、圆角标准（R4/R8/R12/R16）、
+    // 控制尺寸（chip 28、输入 32、按钮 sm 28 / md 36）与排版角色。
+    const RADIUS_XS = 'var(--dsw-radius-xs)'
+    const RADIUS_SM = 'var(--dsw-radius-sm)'
+    const RADIUS_MD = 'var(--dsw-radius-md)'
+    const RADIUS_LG = 'var(--dsw-radius-lg)'
+    // 官方 select 的原生箭头替换（与 ui-settings-models 的 selectInput 同一个 data URI）。
+    const SELECT_CHEVRON = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
+    const MONO_FONT = 'var(--dsw-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)'
+    // 官方 MenuSurface 材质：卡片本体无边框，描边由 elevation 阴影的第一层承担。
+    const MENU_SURFACE = {
+      border: 0,
+      borderRadius: RADIUS_LG,
+      background: 'var(--dsw-menu-surface-fill)',
+      backdropFilter: 'var(--dsw-menu-backdrop-filter)',
+      boxShadow: 'var(--dsw-elevation-prominent)',
+      '--dsw-elevation-stroke-color': 'var(--dsw-alias-border-l1)',
+      '--dsh-scrollbar-thumb': 'var(--dsw-alias-scrollbar-bg-l2)',
+      '--dsh-scrollbar-thumb-hover': 'var(--dsw-alias-scrollbar-hover-l2)',
+      color: 'var(--dsw-alias-label-primary)',
+    }
+    // 官方 Button：primary / secondary 两态，sm 为 28px 高、R8、12/18 排版。
+    function controlButtonStyle(primary) {
+      return {
+        boxSizing: 'border-box',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        height: 28,
+        padding: '0 10px',
+        border: primary ? 'none' : '0.5px solid var(--dsw-alias-border-l3)',
+        borderRadius: RADIUS_SM,
+        background: primary ? 'var(--dsw-alias-button-primary-fill)' : 'transparent',
+        color: primary ? 'var(--dsw-alias-label-primary-foreground)' : 'var(--dsw-alias-label-primary)',
+        font: 'inherit',
+        fontSize: 12,
+        lineHeight: '18px',
+        cursor: 'pointer',
+        flexShrink: 0,
+      }
+    }
+    // 官方输入框：32px 高、R12、0.5px l4 描边、14/22 排版。
+    function controlInputStyle(extra) {
+      return {
+        boxSizing: 'border-box',
+        height: 32,
+        padding: '0 10px',
+        border: '0.5px solid var(--dsw-alias-border-l4)',
+        borderRadius: RADIUS_MD,
+        background: 'var(--dsw-alias-bg-layer-1)',
+        color: 'var(--dsw-alias-label-primary)',
+        font: 'inherit',
+        fontSize: 14,
+        lineHeight: '22px',
+        ...extra,
+      }
+    }
+    //#endregion
+
+    /**
+     * 三态切换：官方 SegmentedControl（ui-primitives 0.2.2-rc.3）。
+     * 轨道是 --dsw-alias-interactive-bg-hover 的浅色底，选中项是一枚带
+     * --dsw-elevation-soft 的滑片（bg-layer-1），不做品牌色填充。
+     */
+    function ModeSwitch(props) {
+      const { mode, disabled, busy, t, onChange, compact } = props
+      const selected = Math.max(0, MODES.indexOf(mode))
+      const count = MODES.length
+      const pad = compact ? 2 : 4
+      const gap = 2
+      const segRadius = compact ? RADIUS_XS : RADIUS_SM
+      const track = {
+        position: 'relative',
+        display: 'inline-grid',
+        gridAutoFlow: 'column',
+        gridAutoColumns: '1fr',
+        gap,
+        padding: pad,
+        border: 0,
+        borderRadius: compact ? RADIUS_SM : RADIUS_MD,
+        background: 'var(--dsw-alias-interactive-bg-hover)',
+        flexShrink: 0,
+      }
+      const indicator = {
+        position: 'absolute',
+        top: pad,
+        left: pad,
+        width: `calc((100% - ${pad * 2}px - ${gap * (count - 1)}px) / ${count})`,
+        height: `calc(100% - ${pad * 2}px)`,
+        border: 0,
+        borderRadius: segRadius,
+        background: 'var(--dsw-alias-bg-layer-1)',
+        boxShadow: 'var(--dsw-elevation-soft)',
+        transform: `translateX(calc(${selected} * (100% + ${gap}px)))`,
+        transition: 'transform 160ms ease',
+        pointerEvents: 'none',
+      }
+      return h('div', { role: 'group', style: track },
+        h('span', { 'aria-hidden': true, style: indicator }),
+        MODES.map((value) => {
+          const active = mode === value
+          return h('button', {
+            key: value,
+            type: 'button',
+            'aria-pressed': active,
+            disabled: disabled || busy,
+            title: t(`hint.${value}`),
+            onClick: (event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              if (!active) onChange(value)
+            },
+            style: {
+              boxSizing: 'border-box',
+              position: 'relative',
+              zIndex: 1,
+              height: compact ? 22 : 28,
+              padding: compact ? '0 8px' : '0 16px',
+              border: 0,
+              borderRadius: segRadius,
+              background: 'transparent',
+              color: active ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
+              font: 'inherit',
+              fontSize: compact ? 11 : 13,
+              lineHeight: compact ? '16px' : '20px',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+              cursor: disabled || busy ? 'default' : 'pointer',
+              opacity: disabled ? 0.4 : 1,
+            }
+          }, t(`mode.${value}`))
+        }))
+    }
+
+    /** 官方 Tag（outline）：0.5px l4 描边、R4、11/16 排版。 */
     function SourceBadge(props) {
       const { source, t } = props
       const label = t(`source.${SOURCES.includes(source) ? source : 'unknown'}`)
       return h('span', {
         style: {
-          fontSize: 10, lineHeight: '14px', padding: '0 5px', borderRadius: 999,
-          border: '1px solid var(--dsw-alias-border-l1)', color: 'var(--dsw-alias-label-secondary)',
+          display: 'inline-flex', flexShrink: 0, alignItems: 'center',
+          padding: '1px 6px', border: '0.5px solid var(--dsw-alias-border-l3)',
+          borderRadius: RADIUS_XS, fontSize: 11, lineHeight: '16px',
+          color: 'var(--dsw-alias-label-secondary)', whiteSpace: 'nowrap',
         }
       }, label)
     }
 
+    /**
+     * 一行技能。`compact` 是 composer 弹层里的菜单行（34px 高、R12、5px 7px 内边距、
+     * 13/20 排版），否则是设置页里的官方设置行（16px 0 内边距、底部 0.5px 分隔线、
+     * 14/22 标题 + 12/18 描述）。
+     */
     function SkillRow(props) {
-      const { row, busy, disabled, t, onChange, compact, showPath, onOpen, used } = props
+      const { row, busy, disabled, t, onChange, compact, showPath, onOpen, used, last } = props
       const [hover, setHover] = React.useState(false)
-      return h('div', {
-        onMouseEnter: () => setHover(true),
-        onMouseLeave: () => setHover(false),
+      const interactive = typeof onOpen === 'function'
+      const name = h('button', {
+        type: 'button',
+        title: interactive ? t('open') : row.name,
+        onClick: () => { if (interactive) onOpen(row) },
         style: {
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 12,
-          padding: compact ? '6px 8px' : '12px 14px',
-          borderRadius: compact ? 8 : 10,
-          border: compact ? 'none' : '1px solid var(--dsw-alias-border-l1)',
-          background: hover ? 'var(--dsw-alias-bg-layer-2)' : (compact ? 'transparent' : 'var(--dsw-alias-bg-layer-1)'),
-          opacity: row.writable ? 1 : 0.72,
+          appearance: 'none', border: 'none', background: 'transparent', padding: 0,
+          font: 'inherit', textAlign: 'left', cursor: interactive ? 'pointer' : 'default',
+          fontSize: compact ? 13 : 14, lineHeight: compact ? '20px' : '22px',
+          fontWeight: compact ? 400 : 400, color: 'var(--dsw-alias-label-primary)',
+          minWidth: 0, flexShrink: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }
+      }, row.name)
+      const nameLine = h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 } },
+        name,
+        used
+          ? h('span', {
+            title: t('usage.usedTitle'),
+            style: {
+              width: 6, height: 6, borderRadius: '50%', cornerShape: 'round',
+              background: 'var(--dsw-alias-state-business-primary)', flexShrink: 0,
+            }
+          })
+          : null,
+        h(SourceBadge, { source: row.source, t }),
+        row.writable ? null : h('span', {
+          style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)', flexShrink: 0 }
+        }, t('builtin')))
+      const switchEl = h(ModeSwitch, { mode: row.mode, disabled, busy, t, onChange, compact })
+      if (compact) {
+        return h('div', {
+          onMouseEnter: () => setHover(true),
+          onMouseLeave: () => setHover(false),
+          style: {
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '5px 7px', borderRadius: RADIUS_MD,
+            background: hover ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent',
+          }
+        },
+        h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 } }, nameLine),
+        switchEl)
+      }
+      return h('div', {
+        style: {
+          display: 'flex', alignItems: 'center', gap: 16,
+          padding: '16px 0',
+          borderBottom: last === true ? 'none' : '0.5px solid var(--dsw-alias-border-l2)',
         }
       },
-      h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: compact ? 1 : 3 } },
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } },
-          h('button', {
-            type: 'button',
-            title: t('open'),
-            onClick: () => { if (onOpen) onOpen(row) },
+      h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 } },
+        nameLine,
+        row.description
+          ? h('div', {
             style: {
-              appearance: 'none', border: 'none', background: 'transparent', padding: 0, cursor: onOpen ? 'pointer' : 'default',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: compact ? 12 : 13,
-              color: 'var(--dsw-alias-label-primary)', textAlign: 'left',
+              fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)',
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
             }
-          }, row.name),
-          used
-            ? h('span', {
-              title: t('usage.usedTitle'),
-              style: { width: 6, height: 6, borderRadius: 3, background: 'var(--dsw-alias-brand-primary)', display: 'inline-block', flexShrink: 0 }
-            })
-            : null,
-          h(SourceBadge, { source: row.source, t }),
-          row.writable ? null : h('span', { style: { fontSize: 10, color: 'var(--dsw-alias-label-secondary)' } }, t('builtin'))
-        ),
-        row.description && compact !== true
-          ? h('div', { style: { fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } }, row.description)
+          }, row.description)
           : null,
         showPath === false
           ? null
           : h('div', {
             title: row.path,
-            style: { fontSize: 10, color: 'var(--dsw-alias-label-secondary)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-          }, row.path)
-      ),
-      h(ModeSwitch, { mode: row.mode, disabled, busy, t, onChange, compact, path: row.path }))
+            style: {
+              fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)',
+              fontFamily: MONO_FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }
+          }, row.path)),
+      switchEl)
     }
 
     // 与 lib/drafts.js 保持同一份文案（客户端模块拿不到本地 ESM 导入）。
@@ -1064,42 +1209,41 @@ window.__ModuleLoader__.load({
       const field = (label, value, mono) => h('div', {
         style: { display: 'flex', gap: 8, fontSize: 12, lineHeight: '18px' }
       },
-      h('span', { style: { width: 64, flexShrink: 0, color: 'var(--dsw-alias-label-secondary)' } }, label),
+      h('span', { style: { width: 64, flexShrink: 0, color: 'var(--dsw-alias-label-tertiary)' } }, label),
       h('span', {
         style: {
           flex: 1, minWidth: 0, wordBreak: 'break-all',
           color: 'var(--dsw-alias-label-primary)',
-          fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
+          fontFamily: mono ? MONO_FONT : 'inherit',
         }
       }, value))
 
       const button = (label, onClick, primary) => h('button', {
         type: 'button',
         onClick,
-        style: {
-          appearance: 'none', font: 'inherit', fontSize: 12, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
-          border: '1px solid var(--dsw-alias-border-l1)',
-          background: primary ? 'var(--dsw-alias-brand-primary)' : 'transparent',
-          color: primary ? 'var(--dsw-alias-bg-base)' : 'var(--dsw-alias-label-primary)',
-        }
+        style: controlButtonStyle(primary),
       }, label)
 
-      return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '2px 10px 8px', overflowY: 'auto', flex: 1, minHeight: 0 } },
+      return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 10px 8px', overflowY: 'auto', flex: 1, minHeight: 0 } },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
           h('button', {
             type: 'button',
             onClick: onBack,
-            style: { appearance: 'none', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 12 }
+            style: {
+              appearance: 'none', border: 'none', background: 'transparent', padding: 0,
+              cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', font: 'inherit',
+              fontSize: 12, lineHeight: '18px',
+            }
           }, '‹ ' + t('detail.back')),
           h('span', { style: { flex: 1 } }),
           h(SourceBadge, { source: row.source, t }),
-          row.writable ? null : h('span', { style: { fontSize: 10, color: 'var(--dsw-alias-label-secondary)' } }, t('builtin'))),
-        h('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary)', wordBreak: 'break-all' } }, row.name),
+          row.writable ? null : h('span', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)' } }, t('builtin'))),
+        h('div', { style: { fontSize: 14, lineHeight: '22px', fontWeight: 500, color: 'var(--dsw-alias-label-primary)', wordBreak: 'break-all' } }, row.name),
         field(t('detail.path'), row.path, true),
         field(t('detail.size'), formatBytes(row.size)),
         field(t('detail.mtime'), formatTime(row.mtimeMs)),
         h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 } },
-          h('span', { style: { width: 64, color: 'var(--dsw-alias-label-secondary)' } }, t('mode.on')),
+          h('span', { style: { width: 64, color: 'var(--dsw-alias-label-tertiary)' } }, t('mode.on')),
           h(ModeSwitch, {
             mode: row.mode,
             disabled: row.writable !== true,
@@ -1109,8 +1253,8 @@ window.__ModuleLoader__.load({
             path: row.path,
             onChange: (mode) => store.applyMode(sessionId, row, mode),
           })),
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
-          h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } }, t('detail.description') + ` · ${description.length}`),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+          h('span', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)' } }, t('detail.description') + ` · ${description.length}`),
           h('div', {
             style: {
               fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-primary)',
@@ -1118,7 +1262,7 @@ window.__ModuleLoader__.load({
             }
           }, description === '' ? '—' : description),
           overLimit
-            ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-warn-primary)' } }, t('detail.descWarn'))
+            ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-warn-label)' } }, t('detail.descWarn'))
             : null),
         h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 } },
           button(t('detail.open'), openFile, false),
@@ -1134,7 +1278,10 @@ window.__ModuleLoader__.load({
             h('button', {
               type: 'button',
               onClick: () => handOff(draftEdit(row)),
-              style: { appearance: 'none', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 11, textDecoration: 'underline' }
+              style: {
+                appearance: 'none', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer',
+                color: 'var(--dsw-alias-link)', font: 'inherit', fontSize: 12, lineHeight: '18px', fontWeight: 500,
+              }
             }, t('detail.edit')))
           : null)
 
@@ -1149,23 +1296,22 @@ window.__ModuleLoader__.load({
       const { t, sessionId, store, file } = props
       if (file === undefined) return null
 
-      const frame = { display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 10px 8px', flex: 1, minHeight: 0 }
-      const inputStyle = {
-        width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12, padding: '4px 8px',
-        borderRadius: 8, border: '1px solid var(--dsw-alias-border-l1)',
-        background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
+      const frame = { display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 10px 8px', flex: 1, minHeight: 0 }
+      const inputStyle = controlInputStyle({ width: '100%' })
+      const textareaStyle = {
+        ...inputStyle,
+        height: 'auto',
+        padding: '8px 10px',
+        lineHeight: '22px',
+        resize: 'vertical',
+        fontFamily: 'inherit',
       }
-      const buttonStyle = (primary) => ({
-        appearance: 'none', font: 'inherit', fontSize: 12, padding: '4px 10px', borderRadius: 8,
-        cursor: 'pointer', border: '1px solid var(--dsw-alias-border-l1)',
-        background: primary ? 'var(--dsw-alias-brand-primary)' : 'transparent',
-        color: primary ? 'var(--dsw-alias-bg-base)' : 'var(--dsw-alias-label-primary)',
-      })
+      const buttonStyle = (primary) => controlButtonStyle(primary)
 
       if (file.kind === 'create') {
         return h('div', { style: frame },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-            h('span', { style: { fontSize: 12, fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, t('editor.create.title')),
+            h('span', { style: { fontSize: 13, lineHeight: '20px', fontWeight: 500, color: 'var(--dsw-alias-label-primary)' } }, t('editor.create.title')),
             h('span', { style: { flex: 1 } }),
             h('button', { type: 'button', onClick: () => store.closeFile(sessionId), style: buttonStyle(false) }, t('editor.cancel'))),
           h('input', {
@@ -1180,23 +1326,27 @@ window.__ModuleLoader__.load({
             value: file.description ?? '',
             placeholder: t('editor.create.description'),
             onChange: (event) => store.updateCreate(sessionId, { description: event.target.value }),
-            style: { ...inputStyle, resize: 'vertical' },
+            style: textareaStyle,
           }),
-          h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)' } }, t('editor.create.hint')),
+          h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)' } }, t('editor.create.hint')),
           file.error ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-error-primary)', whiteSpace: 'pre-wrap' } }, file.error) : null,
           h('div', { style: { display: 'flex', gap: 6 } },
             h('button', {
               type: 'button',
               disabled: file.status === 'saving',
               onClick: () => store.submitCreate(sessionId),
-              style: buttonStyle(true),
+              style: {
+                ...buttonStyle(true),
+                opacity: file.status === 'saving' ? 0.4 : 1,
+                cursor: file.status === 'saving' ? 'default' : 'pointer',
+              },
             }, file.status === 'saving' ? t('editor.saving') : t('editor.create.submit'))))
       }
 
       const problems = Array.isArray(file.problems) ? file.problems : []
       return h('div', { style: frame },
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--dsw-alias-label-secondary)' } },
-          h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, file.name),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)' } },
+          h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 500, fontSize: 13, lineHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, file.name),
           h('span', { style: { flex: 1 } }),
           file.status === 'loading' ? h('span', null, t('editor.loading'))
             : file.status === 'saving' ? h('span', null, t('editor.saving'))
@@ -1208,13 +1358,15 @@ window.__ModuleLoader__.load({
           spellCheck: false,
           disabled: file.status === 'loading',
           style: {
-            ...inputStyle, flex: 1, minHeight: 150,
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-            fontSize: 12, lineHeight: '18px', resize: 'vertical', whiteSpace: 'pre', overflow: 'auto',
+            ...textareaStyle,
+            flex: 1, minHeight: 150,
+            fontFamily: MONO_FONT,
+            fontSize: 12, lineHeight: '18px',
+            whiteSpace: 'pre', overflow: 'auto',
           },
         }),
         problems.length > 0
-          ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-warn-primary)' } }, problems.join('；'))
+          ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-warn-label)' } }, problems.join('；'))
           : null,
         file.error ? h('div', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-state-error-primary)', whiteSpace: 'pre-wrap' } }, file.error) : null,
         h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
@@ -1222,11 +1374,15 @@ window.__ModuleLoader__.load({
             type: 'button',
             disabled: file.status === 'saving' || file.status === 'loading',
             onClick: () => store.saveEditor(sessionId),
-            style: buttonStyle(true),
+            style: {
+              ...buttonStyle(true),
+              opacity: file.status === 'saving' || file.status === 'loading' ? 0.4 : 1,
+              cursor: file.status === 'saving' || file.status === 'loading' ? 'default' : 'pointer',
+            },
           }, file.status === 'saving' ? t('editor.saving') : t('editor.save')),
           h('button', { type: 'button', onClick: () => store.closeFile(sessionId), style: buttonStyle(false) }, t('editor.cancel')),
           h('span', { style: { flex: 1 } }),
-          h('span', { style: { fontSize: 10, lineHeight: '14px', color: 'var(--dsw-alias-label-secondary)' } }, t('editor.backupHint'))))
+          h('span', { style: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)' } }, t('editor.backupHint'))))
     }
 
     /**
@@ -1248,7 +1404,7 @@ window.__ModuleLoader__.load({
         return h('div', {
           style: {
             display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
-            padding: '2px 0 4px', fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)',
+            padding: '2px 0 4px', fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)',
           }
         },
         h(SkillIcon, { size: 12 }),
@@ -1256,8 +1412,8 @@ window.__ModuleLoader__.load({
         ...names.map((name) => h('span', {
           key: name,
           style: {
-            padding: '0 6px', borderRadius: 999, border: '1px solid var(--dsw-alias-border-l1)',
-            color: 'var(--dsw-alias-label-primary)',
+            padding: '1px 6px', borderRadius: '999px', cornerShape: 'round',
+            border: '0.5px solid var(--dsw-alias-border-l4)', color: 'var(--dsw-alias-label-tertiary)',
           }
         }, name)))
       }
@@ -1324,6 +1480,7 @@ window.__ModuleLoader__.load({
         const buttonRef = React.useRef(null)
         const panelRef = React.useRef(null)
         const open = snapshot.open === true
+        const [hover, setHover] = React.useState(false)
         const { limited, off, total } = summarizeRows(snapshot.rows)
         const activeName = activeSkillName(snapshot.usage, sessionId)
         const restricted = limited + off
@@ -1391,29 +1548,34 @@ window.__ModuleLoader__.load({
           'aria-haspopup': 'menu',
           'aria-expanded': open,
           onClick: () => { store.setOpen(sessionId, !open) },
+          onMouseEnter: () => setHover(true),
+          onMouseLeave: () => setHover(false),
           style: {
-            display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 160,
-            padding: '0 6px', height: 24, border: 'none', borderRadius: 6,
-            background: open ? 'var(--dsw-alias-bg-layer-2)' : 'transparent',
-            color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 12,
-            lineHeight: '16px', cursor: 'pointer', flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 220, height: 28,
+            padding: '0 4px 0 8px', border: 'none', borderRadius: RADIUS_SM,
+            background: open || hover ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent',
+            color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 13, lineHeight: '20px',
+            fontWeight: 500, cursor: 'pointer', flexShrink: 0,
           }
         },
         h(SkillIcon, { size: 14 }),
-        h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 132 } },
+        h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
           activeName === undefined ? t('entry.label') : (t('entry.label') + ' · ' + activeName)),
-        restricted > 0
+        restricted > 0 || total > 0
           ? h('span', {
             style: {
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 16, height: 16, padding: '0 4px', borderRadius: 8,
-              background: 'var(--dsw-alias-state-warn-primary)', color: 'var(--dsw-alias-bg-base)',
-              fontSize: 10, lineHeight: '16px', fontWeight: 600,
+              flexShrink: 0,
+              fontSize: 11, lineHeight: '16px',
+              color: restricted > 0 ? 'var(--dsw-alias-state-warn-label)' : 'var(--dsw-alias-label-caption)',
             }
-          }, String(restricted))
-          : total > 0
-            ? h('span', { style: { fontSize: 10, opacity: 0.7 } }, String(total))
-            : null)
+          }, String(restricted > 0 ? restricted : total))
+          : null,
+        h('span', {
+          style: {
+            display: 'inline-flex', flexShrink: 0, color: 'var(--dsw-alias-label-caption)',
+            transition: 'transform 120ms ease', transform: open ? 'rotate(180deg)' : 'none',
+          }
+        }, h(ChevronIcon)))
 
         if (!open) {
           return h('span', { style: { position: 'relative', display: 'inline-flex' } }, button)
@@ -1437,85 +1599,101 @@ window.__ModuleLoader__.load({
               ? t('popover.allOnShort')
               : [off > 0 ? `${off} ${t('dock.offSuffix')}` : '', limited > 0 ? `${limited} ${t('dock.userSuffix')}` : ''].filter(Boolean).join(' · ')
 
+        const menuAction = (label, onClick, options) => {
+          const { title, primary, disabled } = options ?? {}
+          return h('button', {
+            type: 'button',
+            title,
+            disabled,
+            onClick,
+            style: {
+              height: 24, padding: '0 6px', border: 0, borderRadius: RADIUS_SM,
+              background: 'transparent',
+              color: primary ? 'var(--dsw-alias-label-primary)' : 'var(--dsw-alias-label-secondary)',
+              font: 'inherit', fontSize: 12, lineHeight: '18px',
+              cursor: disabled ? 'default' : 'pointer', flexShrink: 0,
+              opacity: disabled ? 0.4 : 1,
+            }
+          }, label)
+        }
+
         const header = h('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px 4px', fontSize: 12, color: 'var(--dsw-alias-label-secondary)' }
+          style: { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px 4px', fontSize: 13, lineHeight: '20px' }
         },
-        h(SkillIcon, { size: 13 }),
-        h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 600 } }, t('entry.label')),
-        h('span', { style: { opacity: 0.8 } }, `· ${total}`),
-        h('span', { style: { flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, statusText),
-        actions
-          ? h('button', {
-            type: 'button',
-            title: t('detail.createHint'),
-            onClick: () => store.openCreate(sessionId),
-            style: { border: 'none', background: 'transparent', color: 'var(--dsw-alias-brand-primary)', font: 'inherit', fontSize: 12, cursor: 'pointer', padding: 0 }
-          }, t('detail.create'))
-          : null,
+        h(SkillIcon, { size: 14, color: 'var(--dsw-alias-label-secondary)' }),
+        h('span', { style: { color: 'var(--dsw-alias-label-primary)', fontWeight: 500 } }, t('entry.label')),
+        h('span', { style: { color: 'var(--dsw-alias-label-tertiary)' } }, '· ' + total),
+        h('span', {
+          style: {
+            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)',
+          }
+        }, statusText),
+        actions ? menuAction(t('detail.create'), () => store.openCreate(sessionId), { title: t('detail.createHint'), primary: true }) : null,
         snapshot.undo
-          ? h('button', {
-            type: 'button',
-            title: t('undo.hint'),
-            disabled: snapshot.busyPath !== undefined,
-            onClick: () => {
-              const target = snapshot.rows.find((row) => row.path === snapshot.undo.path)
-              if (target !== undefined) store.applyMode(sessionId, target, snapshot.undo.from)
-            },
-            style: { border: 'none', background: 'transparent', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 12, cursor: 'pointer', padding: 0 }
-          }, t('undo'))
+          ? menuAction(t('undo'), () => {
+            const target = snapshot.rows.find((row) => row.path === snapshot.undo.path)
+            if (target !== undefined) store.applyMode(sessionId, target, snapshot.undo.from)
+          }, { title: t('undo.hint'), disabled: snapshot.busyPath !== undefined })
           : null,
         restricted > 0
-          ? h('button', {
-            type: 'button',
-            disabled: snapshot.busyPath !== undefined,
-            onClick: () => store.enableAll(sessionId),
-            style: { border: 'none', background: 'transparent', color: 'var(--dsw-alias-brand-primary)', font: 'inherit', fontSize: 12, cursor: 'pointer', padding: 0 }
-          }, t('dock.enableAll'))
+          ? menuAction(t('dock.enableAll'), () => store.enableAll(sessionId), { primary: true, disabled: snapshot.busyPath !== undefined })
           : null,
-        h('button', {
-          type: 'button',
-          onClick: () => store.refresh(sessionId),
-          title: t('refresh'),
-          style: { border: 'none', background: 'transparent', color: 'var(--dsw-alias-label-secondary)', font: 'inherit', fontSize: 12, cursor: 'pointer', padding: 0 }
-        }, t('refresh')))
+        menuAction(t('refresh'), () => store.refresh(sessionId), { title: t('refresh') }))
 
         const usageBar = usedNames.length === 0 ? null : h('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', padding: '0 10px 6px', fontSize: 10, color: 'var(--dsw-alias-label-secondary)' }
+          style: {
+            display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
+            padding: '0 8px 4px', fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-tertiary)',
+          }
         },
         h('span', null, t('usage.session') + ':'),
         ...usedNames.slice(0, 6).map((name) => h('span', {
           key: name,
-          style: { padding: '0 6px', borderRadius: 999, border: '1px solid var(--dsw-alias-border-l1)', color: 'var(--dsw-alias-label-primary)' }
+          style: {
+            padding: '1px 6px', borderRadius: '999px', cornerShape: 'round',
+            border: '0.5px solid var(--dsw-alias-border-l4)', color: 'var(--dsw-alias-label-tertiary)',
+          }
         }, name)),
         usedNames.length > 6 ? h('span', null, '+' + String(usedNames.length - 6)) : null)
 
-        const search = h('div', { style: { padding: '0 10px 6px' } },
+        const search = h('div', { style: { padding: '2px 2px 3px' } },
           h('input', {
             type: 'search',
             value: snapshot.query ?? '',
             placeholder: t('search.placeholder'),
             onChange: (event) => store.setQuery(sessionId, event.target.value),
             style: {
-              width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12,
-              padding: '4px 8px', borderRadius: 8, border: '1px solid var(--dsw-alias-border-l1)',
-              background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
+              boxSizing: 'border-box', width: '100%', margin: 0,
+              height: 30, padding: '0 8px', border: '0.5px solid transparent',
+              borderRadius: RADIUS_MD, background: 'transparent',
+              color: 'var(--dsw-alias-label-primary)', font: 'inherit',
+              fontSize: 12, lineHeight: '18px', outline: 'none',
             }
           }))
 
         const list = rows.length === 0
-          ? h('div', { style: { padding: '10px 12px 12px', fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } },
-            snapshot.status === 'loading' ? t('loading') : (total > 0 ? t('search.none') : t('popover.emptyShort')))
-          : h('div', { style: { overflowY: 'auto', padding: '2px 4px 4px', display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minHeight: 0 } },
-            groups.flatMap((group) => [
+          ? h('div', {
+            style: { padding: '8px', fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' }
+          }, snapshot.status === 'loading' ? t('loading') : (total > 0 ? t('search.none') : t('popover.emptyShort')))
+          : h('div', {
+            style: { overflowY: 'auto', padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }
+          },
+            groups.flatMap((group, groupIndex) => [
               h('div', {
                 key: `head-${group.source}`,
-                style: { padding: '4px 8px 2px', fontSize: 10, letterSpacing: 0.4, color: 'var(--dsw-alias-label-secondary)', textTransform: 'uppercase' }
+                style: {
+                  padding: '6px 8px', fontSize: 11, lineHeight: '15px',
+                  color: 'var(--dsw-alias-label-tertiary)',
+                  marginTop: groupIndex === 0 ? 0 : 3,
+                }
               }, t(`source.${SOURCES.includes(group.source) ? group.source : 'unknown'}`) + ' · ' + String(group.rows.length)),
-              ...group.rows.map((row) => h(SkillRow, {
+              ...group.rows.map((row, rowIndex) => h(SkillRow, {
                 key: row.path,
                 row,
                 compact: true,
                 showPath: false,
+                last: rowIndex === group.rows.length - 1,
                 busy: snapshot.busyPath === row.path || snapshot.busyPath === '*',
                 disabled: row.writable !== true,
                 t,
@@ -1530,12 +1708,11 @@ window.__ModuleLoader__.load({
           'data-sm-panel': '1',
           role: 'menu',
           style: {
-            position: 'fixed', left: 8, bottom: 96, margin: 0, padding: 0,
-            width: 360, maxHeight: 360,
-            border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 12,
-            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.32)',
-            background: 'var(--dsw-alias-bg-overlay)', color: 'var(--dsw-alias-label-primary)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden', visibility: 'hidden', zIndex: 90,
+            ...MENU_SURFACE,
+            position: 'fixed', left: 8, bottom: 96, margin: 0, padding: 4,
+            width: 388, maxHeight: 360,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            visibility: 'hidden', zIndex: 90,
           }
         },
         header,
@@ -1556,7 +1733,12 @@ window.__ModuleLoader__.load({
             }))
           : h(SkillEditor, { t, file: snapshot.file, sessionId, store }),
         h('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px 8px', fontSize: 10, color: 'var(--dsw-alias-label-secondary)', borderTop: '1px solid var(--dsw-alias-border-l1)' }
+          style: {
+            display: 'flex', alignItems: 'center', gap: 8, marginTop: 3,
+            padding: '3px 8px 4px', fontSize: 11, lineHeight: '16px',
+            color: 'var(--dsw-alias-label-tertiary)',
+            borderTop: '0.5px solid var(--dsw-alias-border-l2)',
+          }
         },
         h(ReceiptLine, { lastWrite: snapshot.lastWrite, t }),
         h('span', { style: { flex: 1 } }),
@@ -1565,9 +1747,9 @@ window.__ModuleLoader__.load({
         const crashed = (error) => h('div', {
           'data-sm-panel': '1',
           style: {
+            ...MENU_SURFACE,
             position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, width: 320, padding: '10px 12px',
-            background: 'var(--dsw-alias-bg-overlay)', border: '1px solid var(--dsw-alias-border-l1)',
-            borderRadius: 12, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-state-error-primary)',
+            fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-state-error-primary)',
             whiteSpace: 'pre-wrap', zIndex: 90,
           }
         }, t('menu.crashed') + ': ' + String((error && (error.message || error)) || 'unknown'))
@@ -1584,10 +1766,10 @@ window.__ModuleLoader__.load({
           type: 'button',
           title: props.t('menu.crashed') + ': ' + String((error && (error.message || error)) || 'unknown'),
           style: {
-            display: 'inline-flex', alignItems: 'center', gap: 6, height: 24, padding: '0 6px',
-            border: '1px solid var(--dsw-alias-state-warn-primary)', borderRadius: 6,
+            display: 'inline-flex', alignItems: 'center', gap: 4, height: 28, padding: '0 8px',
+            border: '0.5px solid var(--dsw-alias-state-warn-primary)', borderRadius: RADIUS_SM,
             background: 'transparent', color: 'var(--dsw-alias-state-warn-primary)',
-            font: 'inherit', fontSize: 12, cursor: 'default', flexShrink: 0,
+            font: 'inherit', fontSize: 13, lineHeight: '20px', cursor: 'default', flexShrink: 0,
           }
         }, h(SkillIcon, { size: 14 }), h('span', null, props.t('entry.label')))
 
@@ -1635,21 +1817,28 @@ window.__ModuleLoader__.load({
         const usedNames = sessionUsedNames(snapshot.usage, sessionId)
 
         const header = h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-          h('div', { style: { fontSize: 16, fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, t('title')),
-          h('div', { style: { fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-secondary)' } }, t('subtitle')))
+          h('h2', { style: { margin: 0, fontSize: 18, lineHeight: '26px', fontWeight: 600, color: 'var(--dsw-alias-label-primary)' } }, t('title')),
+          h('p', { style: { margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--dsw-alias-label-tertiary)' } }, t('subtitle')))
 
-        const toolbar = h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+        const countText = snapshot.status === 'loading' && snapshot.rows.length === 0
+          ? t('loading')
+          : `${snapshot.rows.length} ${t('count')}${off + limited > 0 ? ` · ${off + limited} ${t('dock.offSuffix')}` : ''}`
+
+        const toolbar = h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 } },
           sessionOptions.length > 1
-            ? h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } },
+            ? h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } },
               t('session'),
               h('select', {
                 value: sessionId ?? '',
                 onChange: (event) => setSessionId(event.target.value),
-                style: {
-                  font: 'inherit', fontSize: 12, color: 'var(--dsw-alias-label-primary)',
-                  background: 'var(--dsw-alias-bg-layer-1)', border: '1px solid var(--dsw-alias-border-l1)',
-                  borderRadius: 6, padding: '4px 6px', maxWidth: 320,
-                }
+                style: controlInputStyle({
+                  maxWidth: 280, padding: '0 32px 0 10px', appearance: 'none', cursor: 'pointer',
+                  backgroundImage: SELECT_CHEVRON,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 10px center',
+                  backgroundSize: '12px 12px',
+                  fontSize: 13, lineHeight: '20px',
+                })
               }, sessionOptions.map((row) => h('option', { key: row.id, value: row.id }, row.displayTitle ?? row.id))))
             : null,
           h('input', {
@@ -1657,53 +1846,39 @@ window.__ModuleLoader__.load({
             value: snapshot.query ?? '',
             placeholder: t('search.placeholder'),
             onChange: (event) => store.setQuery(sessionId, event.target.value),
-            style: {
-              font: 'inherit', fontSize: 12, padding: '4px 8px', minWidth: 180,
-              borderRadius: 6, border: '1px solid var(--dsw-alias-border-l1)',
-              background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)',
-            }
+            style: controlInputStyle({ flex: '0 1 240px', minWidth: 180 })
           }),
           h('button', {
             type: 'button',
             onClick: () => store.refresh(sessionId),
             disabled: snapshot.status === 'loading',
             style: {
-              appearance: 'none', font: 'inherit', fontSize: 12, color: 'var(--dsw-alias-label-primary)',
-              background: 'transparent', border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 6,
-              padding: '4px 10px', cursor: snapshot.status === 'loading' ? 'default' : 'pointer',
+              ...controlButtonStyle(false),
+              opacity: snapshot.status === 'loading' ? 0.4 : 1,
+              cursor: snapshot.status === 'loading' ? 'default' : 'pointer',
             }
           }, t('refresh')),
           h('button', {
             type: 'button',
             onClick: () => store.openCreate(sessionId),
             title: t('detail.createHint'),
-            style: {
-              appearance: 'none', font: 'inherit', fontSize: 12, color: 'var(--dsw-alias-bg-base)',
-              background: 'var(--dsw-alias-brand-primary)', border: 'none', borderRadius: 6,
-              padding: '4px 10px', cursor: 'pointer',
-            }
+            style: controlButtonStyle(true),
           }, t('detail.create')),
-          h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)' } },
-            snapshot.status === 'loading' && snapshot.rows.length === 0
-              ? t('loading')
-              : `${snapshot.rows.length} ${t('count')}${off + limited > 0 ? ` · ${off + limited} ${t('dock.offSuffix')}` : ''}`))
+          h('span', { style: { fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)', marginLeft: 'auto' } }, countText))
 
         let body
         const detailRow = detailPath === undefined ? undefined : snapshot.rows.find((row) => row.path === detailPath)
+        // 官方设置卡材质：R16 卡片 + module 填充，细节面板/编辑器不再自带描边卡片。
+        const moduleCard = {
+          border: '0.5px solid var(--dsw-alias-settings-card-stroke)',
+          borderRadius: RADIUS_LG,
+          background: 'var(--dsw-alias-bg-module-platform)',
+          display: 'flex', flexDirection: 'column', padding: 6,
+        }
         if (snapshot.file !== undefined) {
-          body = h('div', {
-            style: {
-              border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 10,
-              background: 'var(--dsw-alias-bg-layer-1)', display: 'flex', flexDirection: 'column', minHeight: 320, paddingTop: 8,
-            }
-          }, h(SkillEditor, { t, file: snapshot.file, sessionId, store }))
+          body = h('div', { style: { ...moduleCard, minHeight: 320 } }, h(SkillEditor, { t, file: snapshot.file, sessionId, store }))
         } else if (detailRow !== undefined) {
-          body = h('div', {
-            style: {
-              border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 10,
-              background: 'var(--dsw-alias-bg-layer-1)', maxHeight: 420, display: 'flex', flexDirection: 'column',
-            }
-          }, h(SkillDetail, {
+          body = h('div', { style: { ...moduleCard, maxHeight: 420 } }, h(SkillDetail, {
             t,
             row: detailRow,
             sessionId,
@@ -1715,26 +1890,35 @@ window.__ModuleLoader__.load({
             onClose: () => setDetailPath(undefined),
           }))
         } else if (sessionOptions.length === 0) {
-          body = h('div', { style: { padding: '18px 0', fontSize: 13, color: 'var(--dsw-alias-label-secondary)' } },
+          body = h('div', { style: { padding: '12px 0', fontSize: 13, lineHeight: '20px', color: 'var(--dsw-alias-label-tertiary)' } },
             h('div', { style: { marginBottom: 4, color: 'var(--dsw-alias-label-primary)' } }, t('noSession')),
             t('noSession.hint'))
         } else if (snapshot.status === 'loading' && snapshot.rows.length === 0) {
-          body = h('div', { style: { padding: '18px 0', fontSize: 13, color: 'var(--dsw-alias-label-secondary)' } }, t('loading'))
+          body = h('div', { style: { padding: '12px 0', fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } }, t('loading'))
         } else if (rows.length === 0) {
-          body = h('div', { style: { padding: '18px 0', fontSize: 13, color: 'var(--dsw-alias-label-secondary)' } },
+          body = h('div', { style: { padding: '12px 0', fontSize: 13, lineHeight: '20px', color: 'var(--dsw-alias-label-tertiary)' } },
             h('div', { style: { marginBottom: 4, color: 'var(--dsw-alias-label-primary)' } },
               snapshot.rows.length > 0 ? t('search.none') : (snapshot.error === undefined ? t('empty') : t('dock.readFailed'))),
             snapshot.rows.length > 0 ? null : (snapshot.error === undefined ? t('empty.hint') : h(ErrorLine, { error: snapshot.error, t })))
         } else {
-          body = h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-            groups.flatMap((group) => [
+          body = h('div', { style: { display: 'flex', flexDirection: 'column' } },
+            groups.flatMap((group, groupIndex) => [
               h('div', {
                 key: `head-${group.source}`,
-                style: { fontSize: 11, letterSpacing: 0.4, color: 'var(--dsw-alias-label-secondary)', textTransform: 'uppercase', marginTop: 6 }
+                style: {
+                  margin: 0,
+                  marginTop: groupIndex === 0 ? 0 : 20,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dsw-alias-label-tertiary)',
+                }
               }, t(`source.${SOURCES.includes(group.source) ? group.source : 'unknown'}`) + ' · ' + String(group.rows.length)),
-              ...group.rows.map((row) => h(SkillRow, {
+              ...group.rows.map((row, rowIndex) => h(SkillRow, {
                 key: row.path,
                 row,
+                last: rowIndex === group.rows.length - 1,
                 busy: snapshot.busyPath === row.path || snapshot.busyPath === '*',
                 disabled: row.writable !== true,
                 t,
@@ -1745,15 +1929,21 @@ window.__ModuleLoader__.load({
             ]))
         }
 
-        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14, padding: '2px 0 28px', maxWidth: 760 } },
+        return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, padding: '2px 0 28px', maxWidth: 760 } },
           header,
           toolbar,
           h(ErrorLine, { error: snapshot.error, t }),
           body,
-          h('div', { style: { display: 'flex', gap: 8, fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary)', borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 10 } },
-            h(ReceiptLine, { lastWrite: snapshot.lastWrite, t }),
-            h('span', { style: { flex: 1 } }),
-            h('span', null, t('footer'))))
+          h('div', {
+            style: {
+              display: 'flex', gap: 8, fontSize: 11, lineHeight: '16px',
+              color: 'var(--dsw-alias-label-tertiary)',
+              borderTop: '0.5px solid var(--dsw-alias-border-l2)', paddingTop: 10,
+            }
+          },
+          h(ReceiptLine, { lastWrite: snapshot.lastWrite, t }),
+          h('span', { style: { flex: 1 } }),
+          h('span', null, t('footer'))))
       }
     }
     //#endregion
