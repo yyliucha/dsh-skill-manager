@@ -305,6 +305,9 @@ window.__ModuleLoader__.load({
           description: '',
           source: typeof row.source === 'string' && row.source !== '' ? row.source : 'unknown',
           writable: row.writable === true,
+          // The info card reports these, so the inventory facts must survive the join.
+          size: Number(row.size ?? 0),
+          mtimeMs: Number(row.mtimeMs ?? 0),
         })
       }
       for (const row of Array.isArray(catalog) ? catalog : []) {

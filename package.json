@@ -1,6 +1,6 @@
 {
   "name": "@jacksun1994/dsh-skill-manager",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Enable and disable agent skills from the Harness Web UI.",
   "type": "module",
   "license": "MIT",
