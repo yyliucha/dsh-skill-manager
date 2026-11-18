@@ -41,6 +41,13 @@ window.__ModuleLoader__.load({
       'dock.offSuffix': '已关闭',
       'dock.userSuffix': '仅用户',
       'dock.manage': '管理',
+      'activity.loading': '正在加载技能',
+      'activity.loaded': '技能',
+      'activity.more': '+{count}',
+      'activity.title': '本轮已加载的技能',
+      'activity.loadingState': '加载中',
+      'activity.loadedState': '已加载',
+      'activity.action': '查看本轮已加载的技能',
       'dock.collapse': '收起',
       'dock.enableAll': '全部恢复',
       'dock.readFailed': '技能读取失败',
@@ -128,6 +135,13 @@ window.__ModuleLoader__.load({
       'dock.offSuffix': 'off',
       'dock.userSuffix': 'user only',
       'dock.manage': 'Manage',
+      'activity.loading': 'Loading skill',
+      'activity.loaded': 'Skill',
+      'activity.more': '+{count}',
+      'activity.title': 'Skills loaded in this turn',
+      'activity.loadingState': 'Loading',
+      'activity.loadedState': 'Loaded',
+      'activity.action': 'Show the skills loaded in this turn',
       'dock.collapse': 'Collapse',
       'dock.enableAll': 'Turn all on',
       'dock.readFailed': 'Could not read skills',
@@ -1784,6 +1798,294 @@ window.__ModuleLoader__.load({
     }
     //#endregion
 
+    //#region 本轮技能读数（输入框下方的状态行）
+    // 宿主记录的 usage 回答「这个会话最近用过哪个技能」（45 分钟窗口）；
+    // 这里回答更窄的一个问题：**这一轮**加载了哪些技能、此刻正在加载哪个。
+    // 数据只来自 Chat 会话快照（useChat 标准座位），不额外存状态：重开页面或
+    // 分页回填历史都重建出同一条读数。
+
+    /** 空数组常量：没有读数时不制造新引用。 */
+    const EMPTY_ACTIVITY = Object.freeze([])
+
+    /** 从 `skill` 工具的参数视图里取技能名；流式期间还没到就是空串。 */
+    function readActivityName(args) {
+      if (args === null || args === undefined) return ''
+      try {
+        const value = typeof args.value === 'function' ? args.value('name') : undefined
+        return typeof value === 'string' ? value.trim() : ''
+      } catch {
+        return ''
+      }
+    }
+
+    /** 本轮起点：最后一条真人消息之后；steering 打断不开启新一轮。 */
+    function activityExchangeStart(nodes) {
+      for (let index = nodes.length - 1; index >= 0; index -= 1) {
+        const node = nodes[index]
+        if (node !== null && node !== undefined && node.kind === 'user') return index + 1
+      }
+      return 0
+    }
+
+    /** 一条落地结果对应的工具名，优先取配对调用上的那个。 */
+    function activityCallName(node) {
+      if (node.call !== null && node.call !== undefined && typeof node.call.name === 'string') return node.call.name
+      return typeof node.name === 'string' ? node.name : ''
+    }
+
+    /**
+     * 折叠本轮已落地与仍在跑的 `skill` 调用。
+     *
+     * 加载失败的调用不进读数：那个技能没有生效，错误留在步骤卡片上，把它算成
+     * 「已加载」会误导。
+     * @param nodes - Chat 快照里已落地的事件节点，按流顺序。
+     * @param running - 正在准备或已派发的调用。
+     * @returns 按首次加载排序的技能、最新一个的名字、以及实时加载状态。
+     */
+    function deriveSkillActivity(nodes, running) {
+      const list = Array.isArray(nodes) ? nodes : []
+      const calls = Array.isArray(running) ? running : []
+      const entries = new Map()
+      const order = []
+      const start = activityExchangeStart(list)
+      for (let index = start; index < list.length; index += 1) {
+        const node = list[index]
+        if (node === null || node === undefined || node.kind !== 'tool-result') continue
+        if (activityCallName(node) !== 'skill' || node.isError === true) continue
+        const name = readActivityName(node.args)
+        if (name === '') continue
+        if (!entries.has(name)) order.push(name)
+        entries.set(name, { name, state: 'loaded' })
+      }
+      let latest = order.length === 0 ? '' : order[order.length - 1]
+      let loading = false
+      let runningName = ''
+      for (const call of calls) {
+        if (call === null || call === undefined || call.name !== 'skill') continue
+        loading = true
+        const name = readActivityName(call.args)
+        if (name === '') continue
+        runningName = name
+        if (!entries.has(name)) order.push(name)
+        entries.set(name, { name, state: 'loading' })
+        latest = name
+      }
+      const items = []
+      for (const name of order) {
+        const entry = entries.get(name)
+        if (entry !== undefined) items.push(entry)
+      }
+      return { items, latest, loading, runningName }
+    }
+
+    function selectActivityNodes(snapshot) {
+      const legacy = snapshot === null || snapshot === undefined ? undefined : snapshot.legacy
+      return legacy !== null && legacy !== undefined && Array.isArray(legacy.nodes) ? legacy.nodes : EMPTY_ACTIVITY
+    }
+
+    function selectActivityRunning(snapshot) {
+      const legacy = snapshot === null || snapshot === undefined ? undefined : snapshot.legacy
+      return legacy !== null && legacy !== undefined && Array.isArray(legacy.runningCalls) ? legacy.runningCalls : EMPTY_ACTIVITY
+    }
+
+    /** 四角星：已加载。 */
+    function ActivitySparkIcon() {
+      return h('svg', {
+        viewBox: '0 0 16 16', width: 13, height: 13, 'aria-hidden': true, focusable: 'false',
+        style: { display: 'block', flexShrink: 0 },
+      }, h('path', { d: 'M8 1.4 9.36 6.64 14.6 8 9.36 9.36 8 14.6 6.64 9.36 1.4 8 6.64 6.64Z', fill: 'currentColor' }))
+    }
+
+    /** 开口环：加载中。 */
+    function ActivityRingIcon() {
+      return h('svg', {
+        viewBox: '0 0 16 16', width: 13, height: 13, 'aria-hidden': true, focusable: 'false',
+        style: { display: 'block', flexShrink: 0 },
+      },
+      h('circle', { cx: 8, cy: 8, r: 5.1, fill: 'none', stroke: 'currentColor', strokeOpacity: 0.25, strokeWidth: 1.8 }),
+      h('path', { d: 'M8 2.9A5.1 5.1 0 0 1 13.1 8', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' }))
+    }
+
+    const ACTIVITY_PILL = {
+      display: 'inline-flex', alignItems: 'center', gap: 6, boxSizing: 'border-box',
+      maxWidth: 420, padding: '0 4px', border: 'none', borderRadius: RADIUS_SM,
+      background: 'transparent', color: 'var(--dsw-alias-label-tertiary)',
+      font: 'inherit', fontSize: 12, lineHeight: '20px', whiteSpace: 'nowrap', flexShrink: 0,
+    }
+
+    /** 一行状态：贴住转录末尾，宽度与输入卡片一致（含 compose 的侧向内缩）。 */
+    const ACTIVITY_ROW = {
+      display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
+      width: '100%',
+      maxWidth: 'calc(var(--dsh-composer-card-max-width, 860px) - var(--dsh-composer-dock-inset, 0px) - var(--dsh-composer-dock-inset, 0px))',
+      margin: '0 auto', padding: '0 2px 2px', boxSizing: 'border-box',
+    }
+
+    const ACTIVITY_PANEL = {
+      ...MENU_SURFACE,
+      background: 'var(--dsw-menu-surface-fill, var(--dsw-alias-bg-overlay, rgba(44, 44, 52, 0.98)))',
+      position: 'fixed', margin: 0, zIndex: 60, boxSizing: 'border-box',
+      display: 'flex', flexDirection: 'column', gap: 2,
+      minWidth: 188, maxWidth: 340, maxHeight: 260, overflowY: 'auto',
+      padding: '8px 10px', fontSize: 12, lineHeight: '20px',
+    }
+
+    /**
+     * 输入框下方那行里的技能读数；本轮多于一个技能时点开是本轮清单。
+     * @returns 注册到 `conversation.input.dock` 的组件。
+     */
+    function createSkillActivity() {
+      function SkillActivityBody(props) {
+        const t = props.t
+        const useChat = props.useChat
+        const nodes = useChat(selectActivityNodes)
+        const running = useChat(selectActivityRunning)
+        const model = React.useMemo(() => deriveSkillActivity(nodes, running), [nodes, running])
+        const [open, setOpen] = React.useState(false)
+        const [hover, setHover] = React.useState(false)
+        const rootRef = React.useRef(null)
+        const panelRef = React.useRef(null)
+
+        React.useEffect(() => {
+          const el = panelRef.current
+          if (!open || !el) return undefined
+          try {
+            const native = typeof el.showPopover === 'function'
+            if (native) {
+              el.setAttribute('popover', 'manual')
+              try { el.showPopover() } catch { /* 保持隐藏 */ }
+            }
+            el.style.visibility = 'visible'
+            const rect = rootRef.current && rootRef.current.getBoundingClientRect
+              ? rootRef.current.getBoundingClientRect()
+              : undefined
+            if (rect) {
+              el.style.left = `${Math.max(8, Math.min(rect.left, Math.max(8, window.innerWidth - 348)))}px`
+              el.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 6)}px`
+              el.style.top = 'auto'
+              el.style.right = 'auto'
+            }
+            const onPointerDown = (event) => {
+              const target = event.target
+              if (target && target.closest && target.closest('[data-sm-activity-panel]')) return
+              if (rootRef.current && rootRef.current.contains && rootRef.current.contains(target)) return
+              setOpen(false)
+            }
+            const onKeyDown = (event) => { if (event.key === 'Escape') setOpen(false) }
+            document.addEventListener('mousedown', onPointerDown, true)
+            document.addEventListener('keydown', onKeyDown, true)
+            return () => {
+              document.removeEventListener('mousedown', onPointerDown, true)
+              document.removeEventListener('keydown', onKeyDown, true)
+              if (typeof el.hidePopover === 'function') {
+                try { el.hidePopover() } catch { /* 已经关闭 */ }
+              }
+            }
+          } catch (error) {
+            try { console.error('[skill-manager] activity panel failed:', error) } catch { /* 忽略 */ }
+            return undefined
+          }
+        }, [open])
+
+        // 本轮结束或换了新一轮：不留旧读数。
+        React.useEffect(() => {
+          if (model.items.length === 0 && !model.loading && open) setOpen(false)
+        }, [model.items.length, model.loading, open])
+
+        if (model.items.length === 0 && !model.loading) return null
+
+        const count = model.items.length
+        const expandable = count > 1
+        const name = model.loading ? model.runningName : model.latest
+        const label = t(model.loading ? 'activity.loading' : 'activity.loaded')
+        const reading = name === '' ? label : `${label} · ${name}`
+        const fullList = model.items
+          .map((item) => `${item.name} (${t(item.state === 'loading' ? 'activity.loadingState' : 'activity.loadedState')})`)
+          .join('\n')
+
+        const toggle = () => {
+          if (!expandable) return
+          setOpen(!open)
+        }
+        const onKeyDown = (event) => {
+          if (!expandable) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            toggle()
+          }
+        }
+        const highlighted = expandable && (open || hover)
+
+        const content = [
+          h('span', { key: 'icon', style: { display: 'inline-flex', flexShrink: 0 } },
+            model.loading ? h(ActivityRingIcon) : h(ActivitySparkIcon)),
+          h('span', { key: 'label', style: { color: 'var(--dsw-alias-label-caption)', flexShrink: 0 } }, label),
+          name === '' ? null : h('span', { key: 'sep', style: { color: 'var(--dsw-alias-separator-primary)', flexShrink: 0 }, 'aria-hidden': true }, '·'),
+          name === '' ? null : h('span', {
+            key: 'name',
+            title: name,
+            style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--dsw-alias-label-secondary)' },
+          }, name),
+          count > 1
+            ? h('span', { key: 'count', style: { color: 'var(--dsw-alias-label-caption)', flexShrink: 0 } }, t('activity.more', { count: count - 1 }))
+            : null,
+        ]
+
+        const pill = { ...ACTIVITY_PILL, color: highlighted ? 'var(--dsw-alias-label-secondary)' : ACTIVITY_PILL.color }
+
+        return h(React.Fragment, null,
+          h('div', { style: ACTIVITY_ROW },
+            h('span', { ref: rootRef, style: { display: 'inline-flex', alignItems: 'center', minWidth: 0 } },
+              expandable
+                ? h('button', {
+                  type: 'button',
+                  'data-skill-activity': model.loading ? 'loading' : 'loaded',
+                  'data-skill-name': name,
+                  'data-skill-count': String(count),
+                  title: fullList,
+                  'aria-label': `${reading}。${t('activity.action')}`,
+                  'aria-haspopup': 'dialog',
+                  'aria-expanded': open,
+                  onClick: toggle,
+                  onKeyDown,
+                  onMouseEnter: () => setHover(true),
+                  onMouseLeave: () => setHover(false),
+                  style: { ...pill, cursor: 'pointer', background: highlighted ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent' },
+                }, ...content)
+                : h('span', {
+                  'data-skill-activity': model.loading ? 'loading' : 'loaded',
+                  'data-skill-name': name,
+                  'data-skill-count': String(count),
+                  title: fullList,
+                  style: pill,
+                }, ...content))),
+          open && expandable
+            ? h('div', {
+              key: 'panel',
+              ref: panelRef,
+              'data-sm-activity-panel': '',
+              role: 'dialog',
+              'aria-label': t('activity.title'),
+              style: ACTIVITY_PANEL,
+            },
+            h('div', { style: { color: 'var(--dsw-alias-label-caption)', paddingBottom: 2 } }, t('activity.title')),
+            ...model.items.map((item) => h('div', { key: item.name, style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
+              h('span', { style: { minWidth: 0, overflowWrap: 'anywhere' } }, item.name),
+              h('span', { style: { marginLeft: 'auto', flexShrink: 0, opacity: 0.72 } },
+                t(item.state === 'loading' ? 'activity.loadingState' : 'activity.loadedState')))))
+            : null)
+      }
+
+      /** 标准座位缺席时什么都不画，不去猜。 */
+      function SkillActivity(props) {
+        if (typeof props.useChat !== 'function') return null
+        return h(SkillActivityBody, props)
+      }
+
+      return SkillActivity
+    }
+    //#endregion
+
     //#region settings section
     function createSection(ctx, store) {
       return function SkillManagerSection(props) {
@@ -1994,6 +2296,15 @@ window.__ModuleLoader__.load({
           order: 2,
           label: () => t('entry.label'),
         }, (props) => h(Button, { ...props, t }))), 'skill-manager: composer button')
+
+        // 转录末尾那一行：本轮加载了哪个技能、此刻在加载哪个。
+        const SkillActivity = createSkillActivity()
+        ctx.effect(() => ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+          name: 'conversation.input.dock',
+          id: 'skill-activity',
+          order: -1,
+          locale: NS,
+        }, (props) => h(SkillActivity, { ...props, t }))), 'skill-manager: skill activity')
 
         const TurnTail = createTurnTail(ctx, store)
         ctx.effect(() => ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
