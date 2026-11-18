@@ -1,5 +1,5 @@
 /**
- * 本轮技能读数的浏览器侧测试。
+ * 会话技能读数的浏览器侧测试。
  *
  * client.js 是一个 `window.__ModuleLoader__` 注册，所以这里挂一个假加载器、
  * 用桩 React 调真实工厂、再把插件 apply 到桩 Client 上下文上，取到注册到
@@ -51,7 +51,7 @@ function loadPlugin() {
 
 const { plugin } = loadPlugin()
 
-/** 把插件挂到桩上下文，取回输入框下方那条读数。 */
+/** 把插件挂到桩上下文，取回转录末尾那条读数。 */
 function readingEntry() {
   const entries = []
   let dictionaries
@@ -78,7 +78,7 @@ function readingEntry() {
   }
   plugin.apply(ctx)
   const entry = entries.find((item) => item.options.name === 'conversation.input.dock')
-  assert.ok(entry, '会注册到转录末尾那一行')
+  assert.ok(entry, '会注册到转录末尾那行')
   return entry
 }
 
@@ -107,27 +107,18 @@ function textOf(node) {
   return []
 }
 
-/** 深度优先找第一个满足条件的元素。 */
-function findElement(node, predicate) {
-  if (node === null || node === undefined || typeof node !== 'object') return undefined
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findElement(child, predicate)
-      if (found !== undefined) return found
-    }
-    return undefined
+/** 收集所有技能 chip。 */
+function chipsOf(tree) {
+  const found = []
+  const walk = (node) => {
+    if (node === null || node === undefined || typeof node !== 'object') return
+    if (Array.isArray(node)) { for (const child of node) walk(child); return }
+    if (node.props !== undefined && node.props['data-skill-activity'] !== undefined) { found.push(node); return }
+    if (Array.isArray(node.children)) for (const child of node.children) walk(child)
   }
-  if (node.type !== undefined && predicate(node)) return node
-  if (!Array.isArray(node.children)) return undefined
-  for (const child of node.children) {
-    const found = findElement(child, predicate)
-    if (found !== undefined) return found
-  }
-  return undefined
+  walk(tree)
+  return found
 }
-
-/** 指认读数本体：带 data-skill-activity 的那个元素。 */
-const isReading = (element) => element.props !== undefined && element.props['data-skill-activity'] !== undefined
 
 /** 造参数视图：与 PartialArguments 一样按 key 取值。 */
 function argsOf(value) {
@@ -156,7 +147,6 @@ function runningSkill(name) {
 }
 
 const user = { kind: 'user', seq: 1, time: 1, content: [], source: { kind: 'user' } }
-const steering = { kind: 'steering', messageId: 'm1', seq: 2, time: 2, content: [], source: { kind: 'user' } }
 const otherResult = {
   kind: 'tool-result', seq: 11, time: 1100, callId: 'call-grep', callTime: 1050, name: 'grep',
   args: argsOf({ pattern: 'x' }), call: { name: 'grep', argsRaw: '{"pattern":"x"}' }, content: [], isError: false, subCalls: [],
@@ -174,62 +164,53 @@ test('没有会话快照座位时什么都不画', () => {
   assert.equal(resolveElement(entry.component({})), null)
 })
 
-test('这一轮没加载技能就不占位置', () => {
+test('这个会话还没加载过技能就不占位置', () => {
   assert.equal(render([user, otherResult], []), null)
 })
 
-test('已加载的技能会被点名', () => {
+test('一个技能一个 chip，常驻显示', () => {
   const tree = render([user, skillResult('dsh-doc')], [])
-  const pill = findElement(tree, isReading)
-  assert.equal(pill.type, 'span', '只有一个技能时不可点')
-  assert.equal(pill.props['data-skill-activity'], 'loaded')
-  assert.equal(pill.props['data-skill-name'], 'dsh-doc')
-  assert.equal(pill.props['data-skill-count'], '1')
-  assert.deepEqual(textOf(pill), ['技能', '·', 'dsh-doc'])
-  assert.equal(findElement(tree, (element) => element.type === 'button'), undefined)
+  const chips = chipsOf(tree)
+  assert.equal(chips.length, 1)
+  assert.equal(chips[0].props['data-skill-name'], 'dsh-doc')
+  assert.equal(chips[0].props['data-skill-activity'], 'loaded')
+  assert.deepEqual(textOf(tree), ['技能', 'dsh-doc'])
 })
 
-test('加载中的技能会点名并标成 loading', () => {
-  const tree = render([user], [runningSkill('sh2-print-field-troubleshoot')])
-  const pill = findElement(tree, isReading)
-  assert.equal(pill.props['data-skill-activity'], 'loading')
-  assert.equal(pill.props['data-skill-name'], 'sh2-print-field-troubleshoot')
-  assert.deepEqual(textOf(pill), ['正在加载技能', '·', 'sh2-print-field-troubleshoot'])
+test('多个技能各占一个 chip，不折叠、不隐藏', () => {
+  const tree = render([user, skillResult('alpha'), skillResult('beta'), skillResult('gamma')], [])
+  const chips = chipsOf(tree)
+  assert.deepEqual(chips.map((chip) => chip.props['data-skill-name']), ['alpha', 'beta', 'gamma'])
+  assert.deepEqual(textOf(tree), ['技能', 'alpha', 'beta', 'gamma'])
+  assert.equal(chips.some((chip) => chip.type === 'button'), false, '不再有折叠按钮/弹层')
 })
 
-test('名字还没流到就先只说正在加载', () => {
+test('加载中的技能在 chip 上标出来', () => {
+  const tree = render([user, skillResult('alpha')], [runningSkill('beta')])
+  const chips = chipsOf(tree)
+  assert.deepEqual(chips.map((chip) => [chip.props['data-skill-name'], chip.props['data-skill-activity']]), [
+    ['alpha', 'loaded'],
+    ['beta', 'loading'],
+  ])
+  assert.deepEqual(textOf(tree), ['技能', 'alpha', 'beta'])
+})
+
+test('名字还没流到时先给一个占位 chip', () => {
   const tree = render([user], [runningSkill(undefined)])
-  const pill = findElement(tree, isReading)
-  assert.equal(pill.props['data-skill-activity'], 'loading')
-  assert.deepEqual(textOf(pill), ['正在加载技能'])
+  const chips = chipsOf(tree)
+  assert.equal(chips.length, 1)
+  assert.equal(chips[0].props['data-skill-activity'], 'loading')
+  assert.deepEqual(textOf(tree), ['技能', '正在加载技能'])
 })
 
-test('本轮多个技能只占一个读数，点名最新并带计数', () => {
-  const tree = render([user, skillResult('alpha'), skillResult('beta')], [])
-  const pill = findElement(tree, isReading)
-  assert.equal(pill.type, 'button', '多个技能可以点开清单')
-  assert.equal(pill.props['data-skill-count'], '2')
-  assert.equal(pill.props['aria-expanded'], false)
-  assert.equal(pill.props['aria-haspopup'], 'dialog')
-  assert.deepEqual(textOf(pill), ['技能', '·', 'beta', '+1'])
-  assert.match(pill.props.title, /alpha \(已加载\)/)
-  assert.match(pill.props.title, /beta \(已加载\)/)
+test('上一轮用过的技能仍然常驻显示', () => {
+  const tree = render([user, skillResult('old-skill'), user, otherResult], [])
+  assert.deepEqual(chipsOf(tree).map((chip) => chip.props['data-skill-name']), ['old-skill'])
 })
 
-test('上一轮加载过的技能不留在本轮读数里', () => {
-  assert.equal(render([user, skillResult('old-skill'), user, otherResult], []), null)
-})
-
-test('steering 打断仍然属于本轮', () => {
-  const tree = render([user, skillResult('dsh-doc'), steering, otherResult], [])
-  assert.deepEqual(textOf(findElement(tree, isReading)), ['技能', '·', 'dsh-doc'])
-})
-
-test('同一个技能重复加载只算一次', () => {
+test('同一个技能只占一个 chip', () => {
   const tree = render([user, skillResult('alpha'), skillResult('alpha')], [])
-  const pill = findElement(tree, isReading)
-  assert.equal(pill.props['data-skill-count'], '1')
-  assert.deepEqual(textOf(pill), ['技能', '·', 'alpha'])
+  assert.equal(chipsOf(tree).length, 1)
 })
 
 test('加载失败不冒充已加载', () => {
