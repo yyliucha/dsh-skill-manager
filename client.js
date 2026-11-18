@@ -53,6 +53,7 @@ window.__ModuleLoader__.load({
       'dock.readFailed': '技能读取失败',
       'popover.hint': '切换后立即生效，写入 SKILL.md 的 frontmatter',
       'popover.emptyShort': '没有发现技能',
+      'popover.more': '还有 {count} 个 · 显示全部',
       'popover.allOnShort': '全部开启',
       'menu.crashed': '技能菜单渲染失败',
       'search.placeholder': '搜索名称或描述',
@@ -147,6 +148,7 @@ window.__ModuleLoader__.load({
       'dock.readFailed': 'Could not read skills',
       'popover.hint': 'Takes effect immediately; written to the skill SKILL.md frontmatter.',
       'popover.emptyShort': 'No skills found',
+      'popover.more': '{count} more · Show all',
       'popover.allOnShort': 'all on',
       'menu.crashed': 'Skill menu failed to render',
       'search.placeholder': 'Search name or description',
@@ -1482,6 +1484,11 @@ window.__ModuleLoader__.load({
     }
 
     //#region composer button + popover menu
+    /** 菜单最高高度：技能再多也不让它一路顶到窗口顶端。 */
+    const MENU_MAX_HEIGHT = 520
+    /** 每个来源分组默认露出的行数；其余收进「还有 N 个」。 */
+    const GROUP_VISIBLE_ROWS = 6
+
     /**
      * Composer entry: a compact button that opens a menu above itself.
      * Rendered as a normal React child (no portal) and promoted to the top layer
@@ -1498,11 +1505,17 @@ window.__ModuleLoader__.load({
         const panelRef = React.useRef(null)
         const open = snapshot.open === true
         const [hover, setHover] = React.useState(false)
+        // 哪些来源分组被要求「显示全部」。关掉菜单即复位，下次打开仍是一屏内。
+        const [expandedGroups, setExpandedGroups] = React.useState({})
         const { limited, off, total } = summarizeRows(snapshot.rows)
         const activeName = activeSkillName(snapshot.usage, sessionId)
         const restricted = limited + off
 
         React.useEffect(() => { store.ensure(sessionId) }, [sessionId])
+
+        React.useEffect(() => {
+          if (!open) setExpandedGroups({})
+        }, [open])
 
         const close = React.useCallback(() => { store.setOpen(sessionId, false) }, [sessionId])
         const editing = snapshot.file !== undefined
@@ -1527,7 +1540,8 @@ window.__ModuleLoader__.load({
               const preferred = wide ? 560 : 388
               el.style.left = `${Math.max(8, Math.min(rect.left, Math.max(8, window.innerWidth - maxWidth)))}px`
               el.style.width = `${Math.min(preferred, Math.max(260, window.innerWidth - 16))}px`
-              el.style.maxHeight = `${Math.max(200, rect.top - 24)}px`
+              // 菜单只借用按钮上方一段空间：不封顶时它会一路撑到窗口顶端（技能多时接近 1000px）。
+              el.style.maxHeight = `${Math.min(Math.max(200, rect.top - 24), MENU_MAX_HEIGHT)}px`
               if (native) {
                 el.style.bottom = `${Math.max(8, window.innerHeight - rect.top + 8)}px`
                 el.style.top = 'auto'
@@ -1599,6 +1613,8 @@ window.__ModuleLoader__.load({
         }
 
         const rows = filterRows(snapshot.rows, snapshot.query)
+        // 搜索词非空时不再折叠分组：列表已经被收窄，折叠只会挡住要找的那个。
+        const queryText = String(snapshot.query ?? '').trim()
         const groups = groupRows(rows)
         const openDetail = (row) => { store.setDetail(sessionId, row.path) }
         const detailRow = snapshot.detailPath === undefined
@@ -1696,29 +1712,48 @@ window.__ModuleLoader__.load({
           : h('div', {
             style: { overflowY: 'auto', padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }
           },
-            groups.flatMap((group, groupIndex) => [
-              h('div', {
-                key: `head-${group.source}`,
-                style: {
-                  padding: '6px 8px', fontSize: 11, lineHeight: '15px',
-                  color: 'var(--dsw-alias-label-tertiary)',
-                  marginTop: groupIndex === 0 ? 0 : 3,
-                }
-              }, t(`source.${SOURCES.includes(group.source) ? group.source : 'unknown'}`) + ' · ' + String(group.rows.length)),
-              ...group.rows.map((row, rowIndex) => h(SkillRow, {
-                key: row.path,
-                row,
-                compact: true,
-                showPath: false,
-                last: rowIndex === group.rows.length - 1,
-                busy: snapshot.busyPath === row.path || snapshot.busyPath === '*',
-                disabled: row.writable !== true,
-                t,
-                onOpen: openDetail,
-                used: usedNames.includes(row.name),
-                onChange: (mode) => store.applyMode(sessionId, row, mode),
-              })),
-            ]))
+            groups.flatMap((group, groupIndex) => {
+              // 搜索时一律全展开：此时列表已经被收窄，再折叠只会挡住要找的那个。
+              const expandAll = queryText !== '' || expandedGroups[group.source] === true
+              const shown = expandAll ? group.rows : group.rows.slice(0, GROUP_VISIBLE_ROWS)
+              const hidden = group.rows.length - shown.length
+              return [
+                h('div', {
+                  key: `head-${group.source}`,
+                  style: {
+                    padding: '6px 8px', fontSize: 11, lineHeight: '15px',
+                    color: 'var(--dsw-alias-label-tertiary)',
+                    marginTop: groupIndex === 0 ? 0 : 3,
+                  }
+                }, t(`source.${SOURCES.includes(group.source) ? group.source : 'unknown'}`) + ' · ' + String(group.rows.length)),
+                ...shown.map((row, rowIndex) => h(SkillRow, {
+                  key: row.path,
+                  row,
+                  compact: true,
+                  showPath: false,
+                  last: hidden === 0 && rowIndex === shown.length - 1,
+                  busy: snapshot.busyPath === row.path || snapshot.busyPath === '*',
+                  disabled: row.writable !== true,
+                  t,
+                  onOpen: openDetail,
+                  used: usedNames.includes(row.name),
+                  onChange: (mode) => store.applyMode(sessionId, row, mode),
+                })),
+                hidden > 0
+                  ? h('button', {
+                    key: `more-${group.source}`,
+                    type: 'button',
+                    onClick: () => setExpandedGroups((current) => ({ ...current, [group.source]: true })),
+                    style: {
+                      display: 'flex', alignItems: 'center', gap: 6, margin: '1px 8px 3px',
+                      padding: '3px 6px', border: '0.5px solid var(--dsw-alias-border-l2)', borderRadius: RADIUS_SM,
+                      background: 'transparent', color: 'var(--dsw-alias-label-tertiary)',
+                      font: 'inherit', fontSize: 11, lineHeight: '16px', cursor: 'pointer', textAlign: 'left',
+                    }
+                  }, t('popover.more', { count: hidden }))
+                  : null,
+              ]
+            }))
 
         const panel = h('div', {
           ref: panelRef,

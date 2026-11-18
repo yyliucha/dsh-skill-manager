@@ -1,6 +1,6 @@
 {
   "name": "@jacksun1994/dsh-skill-switcher",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Switch each DeepSeek Harness agent skill on, to user-only, or off — from the composer tool row and a Settings page.",
   "type": "module",
   "license": "MIT",
